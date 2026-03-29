@@ -16,4 +16,11 @@ drizzle
 tmp/
 test.http
 .secrets
+<<<<<<< HEAD
 
+=======
+wrangler.jsonc
+docs/superpowers/
+.cache/
+*.tsbuildinfo
+>>>>>>> bd855ea213305a964c39b3f86a8e5d5dd87aafa7
