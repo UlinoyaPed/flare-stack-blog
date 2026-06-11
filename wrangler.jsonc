@@ -34,6 +34,11 @@
       "binding": "KV",
       "id": "abf55db0d67344629b00c5ea0e8de88b",
       "remote": true
+    },
+    {
+      "binding": "OAUTH_KV",
+      "id": "edacad43e53748a4852f0bc47b337de8",
+      "remote": true
     }
   ],
   "workflows": [
