@@ -1,14 +1,59 @@
 import { ClientOnly } from "@tanstack/react-router";
-import { Copy, KeyRound, Loader2, Plus } from "lucide-react";
-import { useRef, useState } from "react";
+import { Bot, Copy, KeyRound, Plus } from "lucide-react";
+import { Fragment, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
 import ConfirmationModal from "@/components/ui/confirmation-modal";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FormField } from "@/components/ui/form-field";
 import { FuwariModal } from "@/components/ui/fuwari-modal";
-import { SETTINGS_FIELD_CLASS } from "@/features/config/components/admin/settings-pages";
+import { Input } from "@/components/ui/input";
+import { SectionHeading } from "@/components/ui/page-heading";
 import { useApiKeys } from "@/features/api-keys/hooks/use-api-keys";
 import { formatDate } from "@/lib/utils";
 import { m } from "@/paraglide/messages";
 import "./api-key-settings.css";
+
+/** The skill zip attached to the upstream release this build was cut from. */
+const AGENT_SKILL_URL = `https://github.com/du2333/flare-stack-blog/releases/download/v${__APP_VERSION__}/flare-stack-blog-skills-v${__APP_VERSION__}.zip`;
+const AGENT_SKILL_COMMAND = "/flare-stack-blog";
+
+function AgentSkillHint() {
+  const slots = {
+    download: (
+      <a
+        href={AGENT_SKILL_URL}
+        target="_blank"
+        rel="noreferrer"
+        className="font-medium underline underline-offset-2"
+      >
+        {m.settings_api_keys_skill_download({ version: __APP_VERSION__ })}
+      </a>
+    ),
+    command: <code>{AGENT_SKILL_COMMAND}</code>,
+  };
+  // Slots go in as \0-wrapped names so each locale keeps its own word order.
+  const parts = m
+    .settings_api_keys_skill_hint({
+      download: "\0download\0",
+      command: "\0command\0",
+    })
+    .split("\0");
+  return (
+    <Callout icon={Bot} className="settings-key-skill">
+      <p>
+        {parts.map((part, index) =>
+          index % 2 ? (
+            <Fragment key={part}>{slots[part as keyof typeof slots]}</Fragment>
+          ) : (
+            part
+          ),
+        )}
+      </p>
+    </Callout>
+  );
+}
 
 export function ApiKeySettingsSection() {
   const {
@@ -47,44 +92,43 @@ export function ApiKeySettingsSection() {
   };
   return (
     <div className="settings-keys">
-      <div className="settings-section-heading">
-        <div>
-          <h2>{m.settings_nav_api_keys()}</h2>
-          <p className="settings-muted">{m.settings_design_keys_hint()}</p>
-        </div>
-        <button
-          ref={createRef}
-          type="button"
-          className="settings-button fuwari-btn-primary"
-          onClick={() => {
-            setName("");
-            setRevealedKey(null);
-            setOpen(true);
-          }}
-        >
-          <Plus size={16} />
-          {m.settings_api_keys_create()}
-        </button>
-      </div>
+      <SectionHeading
+        className="settings-section-heading"
+        title={m.settings_nav_api_keys()}
+        description={m.settings_design_keys_hint()}
+        actions={
+          <Button
+            ref={createRef}
+            variant="primary"
+            onClick={() => {
+              setName("");
+              setRevealedKey(null);
+              setOpen(true);
+            }}
+            icon={<Plus size={16} />}
+          >
+            {m.settings_api_keys_create()}
+          </Button>
+        }
+      />
+      <AgentSkillHint />
       <div className="settings-key-list" aria-busy={isLoading}>
         {isError ? (
-          <div className="settings-key-empty">
-            <p>{m.settings_design_load_failed()}</p>
-            <button
-              type="button"
-              className="settings-button fuwari-btn-regular"
-              onClick={() => void reload()}
-            >
-              {m.settings_design_retry()}
-            </button>
-          </div>
+          <EmptyState
+            description={m.settings_design_load_failed()}
+            action={
+              <Button onClick={() => void reload()}>
+                {m.settings_design_retry()}
+              </Button>
+            }
+          />
         ) : isLoading ? (
-          <p className="settings-key-empty">{m.settings_api_keys_loading()}</p>
+          <EmptyState description={m.settings_api_keys_loading()} />
         ) : keys.length === 0 ? (
-          <div className="settings-key-empty">
-            <KeyRound size={30} />
-            <p>{m.settings_api_keys_empty()}</p>
-          </div>
+          <EmptyState
+            icon={KeyRound}
+            description={m.settings_api_keys_empty()}
+          />
         ) : (
           <table>
             <thead>
@@ -114,10 +158,11 @@ export function ApiKeySettingsSection() {
                     </ClientOnly>
                   </td>
                   <td>
-                    <button
-                      type="button"
+                    <Button
+                      variant="plain"
+                      tone="danger"
+                      size="sm"
                       disabled={isDeleting}
-                      className="settings-key-revoke"
                       onClick={() =>
                         setPendingDelete({
                           id: key.id,
@@ -126,7 +171,7 @@ export function ApiKeySettingsSection() {
                       }
                     >
                       {m.settings_api_keys_delete()}
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -173,16 +218,12 @@ export function ApiKeySettingsSection() {
                   {revealedKey}
                 </code>
                 <div className="flex justify-end gap-2">
-                  <button
-                    type="button"
-                    className="settings-button fuwari-btn-regular"
-                    onClick={close}
-                  >
+                  <Button onClick={close}>
                     {m.settings_api_keys_dismiss()}
-                  </button>
-                  <button
-                    type="button"
-                    className="settings-button fuwari-btn-primary"
+                  </Button>
+                  <Button
+                    variant="primary"
+                    icon={<Copy size={16} />}
                     onClick={async () => {
                       try {
                         await navigator.clipboard.writeText(revealedKey);
@@ -192,9 +233,8 @@ export function ApiKeySettingsSection() {
                       }
                     }}
                   >
-                    <Copy size={16} />
                     {m.settings_api_keys_copy()}
-                  </button>
+                  </Button>
                 </div>
               </div>
             ) : (
@@ -205,37 +245,28 @@ export function ApiKeySettingsSection() {
                   void create();
                 }}
               >
-                <label className="grid gap-2 text-sm fuwari-text-75">
-                  {m.settings_api_keys_name_label()}
-                  <input
+                <FormField label={m.settings_api_keys_name_label()}>
+                  <Input
                     ref={inputRef}
                     value={name}
                     disabled={isCreating}
                     maxLength={32}
                     onChange={(event) => setName(event.target.value)}
                     placeholder={m.settings_api_keys_name_ph()}
-                    className={SETTINGS_FIELD_CLASS}
                   />
-                </label>
+                </FormField>
                 <div className="flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={close}
-                    disabled={isCreating}
-                    className="settings-button fuwari-btn-regular"
-                  >
+                  <Button onClick={close} disabled={isCreating}>
                     {m.common_cancel()}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="submit"
-                    disabled={!name.trim() || isCreating}
-                    className="settings-button fuwari-btn-primary"
+                    variant="primary"
+                    disabled={!name.trim()}
+                    loading={isCreating}
                   >
-                    {isCreating && (
-                      <Loader2 size={16} className="animate-spin" />
-                    )}
                     {m.settings_api_keys_create()}
-                  </button>
+                  </Button>
                 </div>
               </form>
             )}

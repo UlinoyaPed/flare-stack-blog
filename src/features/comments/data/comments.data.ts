@@ -1,4 +1,15 @@
-import { and, count, desc, eq, exists, inArray, isNull, or } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  exists,
+  inArray,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import {
   COMMENT_PAGE_SIZE,
@@ -174,57 +185,24 @@ export async function getReplyCountByRootId(
   return result[0].count;
 }
 
-async function withReplyToUsers<T extends { replyToCommentId: number | null }>(
-  db: DB,
-  replies: Array<T>,
-) {
-  const targetIds = [
-    ...new Set(
-      replies
-        .map((reply) => reply.replyToCommentId)
-        .filter((id): id is number => id != null),
-    ),
-  ];
-  if (targetIds.length === 0) {
-    return replies.map((reply) => ({ ...reply, replyTo: null }));
-  }
+/** A reply also carries who it answers, resolved in the same query. */
+const replyToComment = alias(CommentsTable, "reply_to_comment");
+const replyToUser = alias(user, "reply_to_user");
+const replyListColumns = {
+  ...commentListColumns,
+  replyTo: { id: replyToUser.id, name: replyToUser.name },
+};
 
-  const targets = await db
-    .select({
-      id: CommentsTable.id,
-      userId: CommentsTable.userId,
-    })
+function selectReplies(db: DB) {
+  return db
+    .select(replyListColumns)
     .from(CommentsTable)
-    .where(inArray(CommentsTable.id, targetIds));
-
-  const userIds = [
-    ...new Set(
-      targets
-        .map((target) => target.userId)
-        .filter((id): id is string => id != null),
-    ),
-  ];
-  const users =
-    userIds.length === 0
-      ? []
-      : await db
-          .select({ id: user.id, name: user.name })
-          .from(user)
-          .where(inArray(user.id, userIds));
-  const userById = new Map(users.map((row) => [row.id, row]));
-  const replyToByCommentId = new Map(
-    targets.map((target) => [
-      target.id,
-      target.userId ? (userById.get(target.userId) ?? null) : null,
-    ]),
-  );
-
-  return replies.map((reply) => ({
-    ...reply,
-    replyTo: reply.replyToCommentId
-      ? (replyToByCommentId.get(reply.replyToCommentId) ?? null)
-      : null,
-  }));
+    .leftJoin(user, eq(CommentsTable.userId, user.id))
+    .leftJoin(
+      replyToComment,
+      eq(CommentsTable.replyToCommentId, replyToComment.id),
+    )
+    .leftJoin(replyToUser, eq(replyToComment.userId, replyToUser.id));
 }
 
 export async function getRepliesByRootId(
@@ -238,20 +216,16 @@ export async function getRepliesByRootId(
 ) {
   const { offset = 0, limit = COMMENT_PAGE_SIZE } = options;
 
-  const replies = await db
-    .select(commentListColumns)
-    .from(CommentsTable)
-    .leftJoin(user, eq(CommentsTable.userId, user.id))
+  return await selectReplies(db)
     .where(
       and(eq(CommentsTable.postId, postId), eq(CommentsTable.rootId, rootId)),
     )
-    .orderBy(CommentsTable.createdAt)
+    .orderBy(CommentsTable.createdAt, CommentsTable.id)
     .limit(Math.min(limit, 100))
     .offset(offset);
-
-  return withReplyToUsers(db, replies);
 }
 
+/** The first replies of every given root in one query, not one per root. */
 export async function getReplyPreviewsByRootIds(
   db: DB,
   postId: number,
@@ -265,16 +239,38 @@ export async function getReplyPreviewsByRootIds(
     return previews;
   }
 
-  const pages = await Promise.all(
-    rootIds.map(async (rootId) => ({
-      rootId,
-      replies: await getRepliesByRootId(db, postId, rootId, {
-        limit: COMMENT_REPLY_PREVIEW_LIMIT,
-      }),
-    })),
-  );
-  for (const page of pages) {
-    previews.set(page.rootId, page.replies);
+  const ranked = db
+    .select({
+      id: CommentsTable.id,
+      position:
+        sql<number>`row_number() over (partition by ${CommentsTable.rootId} order by ${CommentsTable.createdAt}, ${CommentsTable.id})`.as(
+          "position",
+        ),
+    })
+    .from(CommentsTable)
+    .where(
+      and(
+        eq(CommentsTable.postId, postId),
+        inArray(CommentsTable.rootId, rootIds),
+      ),
+    )
+    .as("ranked_replies");
+
+  const rows = await selectReplies(db)
+    .innerJoin(ranked, eq(CommentsTable.id, ranked.id))
+    .where(lte(ranked.position, COMMENT_REPLY_PREVIEW_LIMIT))
+    .orderBy(CommentsTable.createdAt, CommentsTable.id);
+
+  for (const row of rows) {
+    if (row.rootId == null) {
+      continue;
+    }
+    const replies = previews.get(row.rootId);
+    if (replies) {
+      replies.push(row);
+    } else {
+      previews.set(row.rootId, [row]);
+    }
   }
   return previews;
 }
@@ -344,4 +340,33 @@ export async function getCommentAuthorWithEmail(db: DB, commentId: number) {
     email: result[0].userEmail,
     role: result[0].userRole,
   };
+}
+
+/** Handling a Comment is bookkeeping, not an edit: `updated_at` stays. */
+export const keepUpdatedAt = { updatedAt: sql`${CommentsTable.updatedAt}` };
+
+/** Sets when an Admin handled a Comment; null puts it back in the queue. */
+export async function setCommentHandledAt(
+  db: DB,
+  id: number,
+  handledAt: Date | null,
+) {
+  const [comment] = await db
+    .update(CommentsTable)
+    .set({ handledAt, ...keepUpdatedAt })
+    .where(eq(CommentsTable.id, id))
+    .returning({ id: CommentsTable.id });
+  return comment ?? null;
+}
+
+/** Marks a Comment handled unless it already is, keeping the first time. */
+export async function markCommentHandledOnce(
+  db: DB,
+  id: number,
+  handledAt: Date,
+) {
+  await db
+    .update(CommentsTable)
+    .set({ handledAt, ...keepUpdatedAt })
+    .where(and(eq(CommentsTable.id, id), isNull(CommentsTable.handledAt)));
 }

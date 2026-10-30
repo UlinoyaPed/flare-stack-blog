@@ -33,6 +33,11 @@ const boundary = vi.hoisted(() => ({
       create: vi.fn<Client["comments"]["create"]>(),
       remove: vi.fn<Client["comments"]["remove"]>(),
       mine: vi.fn<Client["comments"]["mine"]>(),
+      admin: {
+        markHandled: vi.fn<Client["comments"]["admin"]["markHandled"]>(),
+        unmarkHandled: vi.fn<Client["comments"]["admin"]["unmarkHandled"]>(),
+        markAllHandled: vi.fn<Client["comments"]["admin"]["markAllHandled"]>(),
+      },
     },
     mutedUsers: {
       list: vi.fn<Client["mutedUsers"]["list"]>(),
@@ -53,20 +58,18 @@ vi.mock("@/lib/orpc", async () => {
     orpc: createTanstackQueryUtils(boundary.client),
   };
 });
-vi.mock("@/lib/auth/auth.client", async () => {
+vi.mock("@/lib/auth/auth-client", async () => {
   const { useSyncExternalStore } = await import("react");
   return {
-    authClient: {
-      useSession: () => ({
-        data: useSyncExternalStore(
-          (notify) => {
-            boundary.listeners.add(notify);
-            return () => boundary.listeners.delete(notify);
-          },
-          () => boundary.session,
-        ),
-      }),
-    },
+    useSession: () => ({
+      data: useSyncExternalStore(
+        (notify) => {
+          boundary.listeners.add(notify);
+          return () => boundary.listeners.delete(notify);
+        },
+        () => boundary.session,
+      ),
+    }),
   };
 });
 

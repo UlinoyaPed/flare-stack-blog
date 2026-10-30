@@ -1,3 +1,4 @@
+import { lazy } from "@orpc/server";
 import {
   CommentSelectSchema,
   CreateCommentInputSchema,
@@ -19,37 +20,7 @@ import {
   withRateLimit,
 } from "@/lib/orpc/procedure";
 import { unwrapResult } from "@/lib/orpc/unwrap-result";
-
-const commentErrors = {
-  ROOT_COMMENT_NOT_FOUND: { status: 404, message: "Root comment not found." },
-  INVALID_ROOT_ID: { status: 400, message: "Invalid root comment." },
-  ROOT_COMMENT_POST_MISMATCH: {
-    status: 400,
-    message: "Root comment does not belong to this post.",
-  },
-  REPLY_TO_COMMENT_NOT_FOUND: {
-    status: 404,
-    message: "Reply target not found.",
-  },
-  REPLY_TO_COMMENT_ROOT_MISMATCH: {
-    status: 400,
-    message: "Reply target is not in this thread.",
-  },
-  ROOT_COMMENT_CANNOT_HAVE_REPLY_TO: {
-    status: 400,
-    message: "A root comment cannot reply to another comment.",
-  },
-  COMMENT_NOT_FOUND: { status: 404, message: "Comment not found." },
-  POST_NOT_FOUND: { status: 404, message: "Post not found." },
-  POST_NOT_PUBLISHED: {
-    status: 400,
-    message: "Comments require a published post.",
-  },
-  USER_MUTED: {
-    status: 403,
-    message: "Muted users cannot create comments.",
-  },
-} as const;
+import { commentErrors } from "./errors";
 
 const roots = optionalSessionProcedure
   .route({
@@ -137,6 +108,9 @@ const create = authProcedure
       USER_MUTED: () => {
         throw errors.USER_MUTED();
       },
+      NAME_REQUIRED: () => {
+        throw errors.NAME_REQUIRED();
+      },
     }),
   );
 
@@ -181,4 +155,6 @@ export default {
   create,
   remove,
   mine,
+  // Loaded on the first request under the prefix; public calls never load it.
+  admin: lazy(() => import("./admin-router"), { prefix: "/admin/comments" }),
 };
