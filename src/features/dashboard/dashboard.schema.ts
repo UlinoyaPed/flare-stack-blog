@@ -1,6 +1,5 @@
 import { z } from "zod";
-
-const coercedDate = z.union([z.date(), z.string().pipe(z.coerce.date())]);
+import { coercedDate } from "@/lib/orpc/dates";
 
 const DashboardRecentPostSchema = z.object({
   id: z.number().int().positive(),
@@ -8,6 +7,7 @@ const DashboardRecentPostSchema = z.object({
   status: z.enum(["draft", "published"]),
   pinnedAt: coercedDate.nullable(),
   updatedAt: coercedDate,
+  hasUnpublishedChanges: z.boolean(),
 });
 
 const DashboardPendingFriendLinkSchema = z.object({
@@ -18,16 +18,26 @@ const DashboardPendingFriendLinkSchema = z.object({
   createdAt: coercedDate,
 });
 
+/**
+ * An unreplied Comment, on a public Post or on a Moment (ADR 0037): the
+ * post fields are null for a Moment's Comment and the moment fields for a
+ * Post's.
+ */
 const DashboardCommentSchema = z.object({
   id: z.number().int().positive(),
-  postId: z.number().int().positive(),
+  postId: z.number().int().positive().nullable(),
+  momentId: z.number().int().positive().nullable(),
   rootId: z.number().int().positive().nullable(),
   userId: z.string().nullable(),
   userName: z.string().nullable(),
   userImage: z.string().nullable(),
   userMuted: z.boolean(),
-  postTitle: z.string(),
-  postSlug: z.string(),
+  postTitle: z.string().nullable(),
+  postSlug: z.string().nullable(),
+  /** The start of the Moment's text, or what it holds when it has none. */
+  momentTitle: z.string().nullable(),
+  /** The Comment's public link (ADR 0015), on its Post's or Moment's page. */
+  commentPath: z.string(),
   snippet: z.string(),
   createdAt: coercedDate,
 });
@@ -37,7 +47,7 @@ const count = z.number().int().nonnegative();
 const DashboardStatsSchema = z.object({
   publishedPosts: count,
   draftPosts: count,
-  /** Published Comments on public Posts. */
+  /** Published Comments on public Posts and on Moments. */
   comments: count,
   /** Of those, created in the last DASHBOARD_RECENT_COMMENT_DAYS days. */
   recentComments: count,
@@ -100,7 +110,7 @@ export const DashboardOverviewSchema = z.object({
   }),
 });
 
-export const UnrepliedCommentsInputSchema = z.object({
+export const UnrepliedCommentsInputSchema = z.strictObject({
   limit: z.number().int().min(1).max(50).default(20),
   /** Continue after this Comment: the previous page's `nextBeforeId`. */
   beforeId: z.number().int().positive().optional(),

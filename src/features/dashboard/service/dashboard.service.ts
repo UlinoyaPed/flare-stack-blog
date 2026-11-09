@@ -1,3 +1,4 @@
+import { publicCommentPath } from "@/features/comments/comment-url";
 import { resolveSystemConfig } from "@/features/config/config.resolve";
 import * as ConfigRepo from "@/features/config/data/config.data";
 import * as DashboardRepo from "@/features/dashboard/data/dashboard.data";
@@ -22,9 +23,11 @@ import type {
   UnrepliedCommentsInput,
 } from "@/features/dashboard/dashboard.schema";
 import * as FriendLinkRepo from "@/features/friend-links/data/friend-links.data";
+import { momentHeading } from "@/features/moments/utils/moment-heading";
 import { isMuted } from "@/features/muted-users/muted-users";
 import { postPopularityService } from "@/features/post-popularity/service/post-popularity.service";
 import * as PostRepo from "@/features/posts/data/posts.data";
+import * as UnpublishedChangesService from "@/features/posts/services/unpublished-changes.service";
 import { versionChecker } from "@/features/version/service/version.service";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -72,6 +75,8 @@ export async function getDashboardOverview(
     now - DASHBOARD_RECENT_COMMENT_DAYS * DAY_MS,
   );
   const writingSince = new Date(now - DASHBOARD_WRITING_LOOKBACK_DAYS * DAY_MS);
+  // Recent posts compare fingerprints in SQL, so migrated Posts need theirs.
+  await UnpublishedChangesService.settleFingerprints(db);
 
   const [
     { alert, popularity },
@@ -155,21 +160,49 @@ export async function getDashboardOverview(
 function toDashboardComments(
   rows: Awaited<ReturnType<typeof DashboardRepo.listUnrepliedComments>>,
 ): Array<DashboardComment> {
-  return rows.flatMap((comment) => {
-    if (!comment.postSlug) return [];
+  return rows.flatMap((comment): Array<DashboardComment> => {
+    const common = {
+      id: comment.id,
+      rootId: comment.rootId,
+      userId: comment.userId,
+      userName: comment.userName,
+      userImage: comment.userImage,
+      userMuted: isMuted(comment.userMutedAt),
+      snippet: commentSnippet(comment.content),
+      createdAt: comment.createdAt,
+    };
+    if (comment.momentId !== null && comment.momentText !== null) {
+      return [
+        {
+          ...common,
+          postId: null,
+          postTitle: null,
+          postSlug: null,
+          momentId: comment.momentId,
+          momentTitle: momentHeading({
+            text: comment.momentText,
+            hasVideo: comment.momentHasVideo,
+          }),
+          commentPath: publicCommentPath(
+            { type: "moment", id: comment.momentId },
+            comment.id,
+          ),
+        },
+      ];
+    }
+    if (!comment.postSlug || comment.postId === null) return [];
     return [
       {
-        id: comment.id,
+        ...common,
         postId: comment.postId,
-        rootId: comment.rootId,
-        userId: comment.userId,
-        userName: comment.userName,
-        userImage: comment.userImage,
-        userMuted: isMuted(comment.userMutedAt),
         postTitle: comment.postTitle,
         postSlug: comment.postSlug,
-        snippet: commentSnippet(comment.content),
-        createdAt: comment.createdAt,
+        momentId: null,
+        momentTitle: null,
+        commentPath: publicCommentPath(
+          { type: "post", slug: comment.postSlug },
+          comment.id,
+        ),
       },
     ];
   });

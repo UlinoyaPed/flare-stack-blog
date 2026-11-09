@@ -2,7 +2,9 @@ import { useState } from "react";
 import { cn, formatBytes } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { mediaUsageOf } from "@/features/media/utils/media.utils";
 import { m } from "@/paraglide/messages";
+import { usageCount } from "../media-usage";
 import type { MediaAsset } from "../types";
 
 export function MediaTile({
@@ -17,7 +19,8 @@ export function MediaTile({
   onSelect: (asset: MediaAsset) => void;
 }) {
   const [loaded, setLoaded] = useState(false);
-  const unused = asset.postCount === 0;
+  const usage = mediaUsageOf(asset);
+  const unused = usage === "none";
 
   return (
     <button
@@ -62,7 +65,11 @@ export function MediaTile({
                 {m.media_badge_unused()}
               </span>
             ) : (
-              <span>{m.media_post_count({ count: asset.postCount })}</span>
+              <span>
+                {usage === "current"
+                  ? usageCount(asset)
+                  : m.media_badge_revisions()}
+              </span>
             )}
             <span>{formatBytes(asset.sizeInBytes)}</span>
           </div>

@@ -3,12 +3,15 @@ import "@/features/friend-links/friend-links.cache";
 import "@/features/posts/posts.cache";
 import "@/features/categories/categories.cache";
 import "@/features/tags/tags.cache";
+import "@/features/moments/moments.cache";
 import { lazy, type UnlaziedRouter } from "@orpc/server";
+import pairingRouter from "@/features/agent-pairing/server/router";
 import categoriesRouter from "@/features/categories/server/router";
 import commentsRouter from "@/features/comments/server/router";
 import configRouter from "@/features/config/server/router";
 import emailRouter from "@/features/email/server/router";
 import friendLinksRouter from "@/features/friend-links/server/router";
+import momentsRouter from "@/features/moments/server/router";
 import postsRouter from "@/features/posts/server/router";
 import searchRouter from "@/features/search/server/router";
 import tagsRouter from "@/features/tags/server/router";
@@ -18,6 +21,7 @@ import tagsRouter from "@/features/tags/server/router";
 // Admin procedures lazy the same way.
 export const router = {
   posts: postsRouter,
+  moments: momentsRouter,
   tags: tagsRouter,
   categories: categoriesRouter,
   comments: commentsRouter,
@@ -47,6 +51,7 @@ export const router = {
   webhooks: lazy(() => import("@/features/webhook/server/router"), {
     prefix: "/admin/webhooks",
   }),
+  pairing: pairingRouter,
 };
 
 /** The router with every lazy part loaded: the shape clients call. */
