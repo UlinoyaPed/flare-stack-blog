@@ -11,7 +11,10 @@ import type { useMediaPicker } from "@/features/media/components/media-library/h
 import type { MediaAsset } from "@/features/media/components/media-library/types";
 import { getPublicImageSrc } from "@/features/media/utils/media.utils";
 import type { MomentImage } from "@/features/moments/schema/moments.schema";
-import { momentImageLayout } from "@/features/moments/utils/moment-images";
+import {
+  momentImageLayout,
+  singleImageBox,
+} from "@/features/moments/utils/moment-images";
 import { MOMENT_IMAGES_MAX } from "@/features/moments/utils/moment-rules";
 import {
   directVideoHost,
@@ -169,7 +172,7 @@ export function MomentImageGrid({
         className={cn(
           "grid gap-1",
           single
-            ? "w-fit max-w-full grid-cols-1"
+            ? "w-full max-w-xs grid-cols-1 justify-items-start"
             : cn("max-w-xs", columns === 2 ? "grid-cols-2" : "grid-cols-3"),
         )}
       >
@@ -201,10 +204,16 @@ export function MomentImageGrid({
               }}
               onDrop={(event) => dropOn(event, tile)}
               onDragEnd={endDrag}
+              style={
+                single && isImage
+                  ? singleImageBox(tile.image.width, tile.image.height, "11rem")
+                      .style
+                  : undefined
+              }
               className={cn(
-                "group relative overflow-hidden rounded-lg bg-(--fuwari-btn-regular-bg)",
+                "group relative overflow-hidden rounded-lg bg-(--theme-tonal-bg)",
                 single
-                  ? "rounded-xl"
+                  ? "max-w-full rounded-xl"
                   : columns === 2
                     ? "aspect-4/3"
                     : "aspect-square",
@@ -212,20 +221,18 @@ export function MomentImageGrid({
                 dragKey === tile.key && "opacity-40",
                 overKey === tile.key &&
                   dragKey !== tile.key &&
-                  "ring-2 ring-(--fuwari-primary)",
+                  "ring-2 ring-(--theme-accent)",
               )}
             >
               {tile.kind === "image" ? (
                 <img
                   src={getPublicImageSrc(tile.image.url, 400)}
                   alt={m.moment_admin_image_alt({ index: index + 1 })}
-                  width={single ? (tile.image.width ?? undefined) : undefined}
-                  height={single ? (tile.image.height ?? undefined) : undefined}
                   loading="lazy"
                   draggable={false}
                   className={
                     single
-                      ? "block h-auto max-h-44 w-auto max-w-full object-contain"
+                      ? "block size-full object-contain"
                       : "absolute inset-0 size-full object-cover"
                   }
                 />
@@ -239,7 +246,7 @@ export function MomentImageGrid({
                     count: tiles.length,
                   })}
                   onClick={() => setShowAll(true)}
-                  className="absolute inset-0 flex items-center justify-center gap-1.5 bg-black/55 text-lg font-bold text-white focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--fuwari-primary)"
+                  className="absolute inset-0 flex items-center justify-center gap-1.5 bg-black/55 text-lg font-bold text-white focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--theme-accent)"
                 >
                   +{layout.more}
                   {hiddenPending > 0 ? <Spinner size={14} /> : null}
@@ -333,7 +340,7 @@ function PendingTile({
           className="absolute inset-0 size-full object-cover opacity-50"
         />
       ) : null}
-      <span className="absolute inset-0 flex items-center justify-center text-(--fuwari-primary)">
+      <span className="absolute inset-0 flex items-center justify-center text-(--theme-accent)">
         {pending.state === "uploading" ? (
           <Spinner size={20} />
         ) : (
@@ -463,7 +470,7 @@ export function MomentVideoCard({
             className="absolute inset-0 size-full object-cover"
           />
         ) : (
-          <span className="absolute inset-0 bg-linear-to-br from-(--fuwari-primary)/40 via-neutral-800 to-neutral-900" />
+          <span className="absolute inset-0 bg-linear-to-br from-(--theme-accent)/40 via-neutral-800 to-neutral-900" />
         )}
         <span className="absolute inset-0 flex items-center justify-center">
           <span className="flex size-7 items-center justify-center rounded-full bg-black/55 backdrop-blur-sm">
